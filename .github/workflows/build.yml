@@ -1,0 +1,59 @@
+name: Build APKs
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # 署名鍵（任意）。Settings > Secrets and variables > Actions に KEYSTORE_BASE64 などを登録すると使われます。
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "Signing with your release key."
+          else
+            echo "No signing key registered. Using a temporary debug key."
+          fi
+
+      - name: Build APKs
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p out
+          cp camera/build/outputs/apk/release/*.apk out/Camera.apk
+          cp gallery/build/outputs/apk/release/*.apk out/Gallery.apk
+          cp video/build/outputs/apk/release/*.apk out/Video.apk
+          cp music/build/outputs/apk/release/*.apk out/Music.apk
+          cp notes/build/outputs/apk/release/*.apk out/Notes.apk
+          cp calendar/build/outputs/apk/release/*.apk out/Calendar.apk
+          cp calculator/build/outputs/apk/release/*.apk out/Calculator.apk
+          cp alarm/build/outputs/apk/release/*.apk out/Alarm.apk
+          cp files/build/outputs/apk/release/*.apk out/Files.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlainApps-apk
+          path: out/*.apk
